@@ -5,7 +5,9 @@ import com.example.tic.entity.User;
 import com.example.tic.entity.UserId;
 import com.example.tic.repository.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -75,29 +77,41 @@ public class AuthService {
         return new ApiResponse("Registered successfully", true, LocalDateTime.now());
     }
 
-    public AuthResponse login(LoginRequest req) {
 
-        authManager.authenticate(new UsernamePasswordAuthenticationToken(req.identifier(), req.password()));
 
-        User u = (req.identifier() != null && req.identifier().contains("@"))
-                ? repo.findByEmail(req.identifier()).orElseThrow(() -> new UsernameNotFoundException("User not found"))
-                : repo.findByNationalId(req.identifier()).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+public AuthResponse login(LoginRequest req) {
 
-        String token = jwtService.generateToken(u);
+    authManager.authenticate(
+            new UsernamePasswordAuthenticationToken(req.identifier(), req.password())
+    );
 
-        UserDto dto = new UserDto(
-                u.getId() != null ? u.getId().getUserId() : null,
-                u.getFirstName(),
-                u.getLastName(),
-                u.getEmail(),
-                u.getPhoneNumber(),
-                u.getNationalId(),
-                u.getRole(),
-                u.getIsActive(),
-                u.getProfileImage(),
-                u.getSignatureImage()
-        );
+User u = (req.identifier() != null && req.identifier().contains("@"))
+        ? repo.findByEmail(req.identifier())
+            .orElseThrow(() -> new UsernameNotFoundException("User not found"))
+        : repo.findByNationalId(req.identifier())
+            .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        return new AuthResponse(token, dto);
+
+    if (u.getIsActive() == null || u.getIsActive() != 1) {
+        throw new IllegalStateException("User account is not active");
     }
+
+    String token = jwtService.generateToken(u);
+
+    UserDto dto = new UserDto(
+            u.getId() != null ? u.getId().getUserId() : null,
+            u.getFirstName(),
+            u.getLastName(),
+            u.getEmail(),
+            u.getPhoneNumber(),
+            u.getNationalId(),
+            u.getRole(),
+            u.getIsActive(),
+            u.getProfileImage(),
+            u.getSignatureImage()
+    );
+
+    return new AuthResponse(token, dto);
+}
+
 }
